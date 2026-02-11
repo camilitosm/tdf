@@ -1,227 +1,238 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Real Football Trivia</title>
-  <style>
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:Arial,Helvetica,sans-serif;
-      background:linear-gradient(180deg,#0b132b,#1c2541);
-      color:#fff;
-      min-height:100vh;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-    }
-    .app{width:100%;max-width:750px;padding:16px}
-    h1{text-align:center;margin-bottom:10px}
-    .info{text-align:center;margin-bottom:10px}
-    .card{background:#1c2541;padding:16px;border-radius:12px}
-    button{
-      width:100%;padding:12px;margin:6px 0;border:none;
-      border-radius:10px;font-size:1rem;cursor:pointer;
-      background:#3a86ff;color:#fff
-    }
-    button:hover{opacity:.9}
-    input{
-      width:100%;padding:12px;margin-top:10px;
-      border-radius:10px;border:none;font-size:1rem
-    }
-    .timer{width:100%;height:14px;background:#415a77;border-radius:10px;margin-bottom:10px;overflow:hidden}
-    .timer div{height:100%;width:100%;background:#ffd166;transition:width 1s linear;animation:pulse 1s infinite}
-    @keyframes pulse{0%{opacity:1}50%{opacity:.6}100%{opacity:1}}
-    @keyframes winPop{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
-    @keyframes loseShake{0%{transform:translateX(0)}25%{transform:translateX(-6px)}50%{transform:translateX(6px)}75%{transform:translateX(-6px)}100%{transform:translateX(0)}}
-    .win{animation:winPop .8s ease-out;text-align:center}
-    .lose{animation:loseShake .6s;text-align:center;color:#ff6b6b}
-    .medal{font-size:1.2rem;margin-right:6px}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real Football Trivia</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial, sans-serif;
+background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+color:white;
+text-align:center;
+}
+
+.screen{display:none;padding:20px;}
+.active{display:block;}
+
+button{
+padding:10px 20px;
+margin:8px;
+border:none;
+border-radius:8px;
+cursor:pointer;
+font-weight:bold;
+}
+
+.option{
+display:block;
+width:90%;
+max-width:400px;
+margin:8px auto;
+background:#1e90ff;
+color:white;
+}
+
+.option:hover{background:#00bfff;}
+
+#timerBar{
+height:15px;
+width:100%;
+background:red;
+margin:10px 0;
+transition:width 1s linear;
+}
+
+input{
+padding:8px;
+border-radius:6px;
+border:none;
+}
+
+.winAnim{animation:win 1s infinite alternate;}
+@keyframes win{from{transform:scale(1);}to{transform:scale(1.1);} }
+
+.loseAnim{animation:lose 0.5s infinite alternate;}
+@keyframes lose{from{background:#8b0000;}to{background:#ff0000;} }
+
+</style>
 </head>
 <body>
-<div class="app">
-  <h1>⚽ Real Football Trivia ⚽</h1>
-  <div id="status" class="info"></div>
-  <div id="timer" class="timer"><div id="timerFill"></div></div>
-  <div id="game" class="card"></div>
+
+<div id="start" class="screen active">
+<h1>⚽ Real Football Trivia</h1>
+<input id="username" placeholder="Nombre de usuario">
+<br>
+<button onclick="startGame()">Jugar</button>
+<button onclick="showRanking()">Ver Ranking</button>
+</div>
+
+<div id="game" class="screen">
+<h2 id="question"></h2>
+<div id="timerBar"></div>
+<div id="options"></div>
+<p>Puntos: <span id="score">0</span> | Vidas: <span id="lives">3</span></p>
+<button id="doubleBtn" style="display:none;background:gold;color:black;" onclick="activateDouble()">🔥 Activar 2X (8 seg)</button>
+</div>
+
+<div id="ranking" class="screen">
+<h2>🏆 Ranking</h2>
+<div id="rankList"></div>
+<button onclick="backToMenu()">⬅ Volver</button>
 </div>
 
 <script>
-let username='';
-let i=0;
-let score=0;
-let tries=2;
-let time=17;
-let timerInterval;
 
-const lockKey='rft_lock';
+let questions = [
+{question:"¿Quién tiene el récord de 91 goles en un año?",options:["Messi","Cristiano Ronaldo","Pelé"],correctIndex:0},
+{question:"Selección presente en todos los Mundiales",options:["Brasil","Alemania","Italia"],correctIndex:0},
+{question:"Máximo goleador histórico de Champions",options:["Cristiano Ronaldo","Messi","Lewandowski"],correctIndex:0},
+{question:"Jugador con 3 Mundiales",options:["Pelé","Maradona","Beckenbauer"],correctIndex:0},
+{question:"País con más finales perdidas sin ganar Mundial",options:["Países Bajos","Croacia","Hungría"],correctIndex:0},
+{question:"Arquero podio Balón de Oro siglo XXI",options:["Manuel Neuer","Buffon","Casillas"],correctIndex:0},
+{question:"Máximo goleador de selecciones",options:["Cristiano Ronaldo","Messi","Ali Daei"],correctIndex:0},
+{question:"Gol más rápido en Mundiales",options:["Hakan Sükür","Ronaldo","Messi"],correctIndex:0},
+{question:"Club más antiguo del mundo",options:["Sheffield FC","Notts County","Génova"],correctIndex:0},
+{question:"Distancia del penal",options:["11 metros","12 metros","10 metros"],correctIndex:0},
 
-function locked(){
-  const until=localStorage.getItem(lockKey);
-  if(!until) return false;
-  return Date.now()<parseInt(until);
-}
+{question:"DT Argentina 1986",options:["Bilardo","Menotti","Basile"],correctIndex:0},
+{question:"Estadio final 1930",options:["Centenario","Maracaná","Azteca"],correctIndex:0},
+{question:"Club con más Champions después del Madrid",options:["AC Milan","Liverpool","Bayern"],correctIndex:0},
+{question:"Jugador en 5 continentes",options:["Pfannenstiel","Beckham","Rivaldo"],correctIndex:0},
+{question:"Más Libertadores jugador",options:["Francisco Sá","Riquelme","Bochini"],correctIndex:0},
+{question:"Eurocopa sin clasificar originalmente",options:["Dinamarca","Grecia","Portugal"],correctIndex:0},
+{question:"Más rojas profesional",options:["Gerardo Bedoya","Pepe","Sergio Ramos"],correctIndex:0},
+{question:"Primer club británico campeón Europa",options:["Celtic","Manchester United","Liverpool"],correctIndex:0},
+{question:"Jugador con Champions en 3 clubes",options:["Seedorf","Cristiano","Ibrahimovic"],correctIndex:0},
+{question:"Único invicto Premier 38 partidos",options:["Arsenal","Chelsea","United"],correctIndex:0},
 
-function lockGame(){
-  const until=Date.now()+(24*60*60*1000);
-  localStorage.setItem(lockKey,until);
-}
+{question:"Récord invicto selecciones",options:["Italia","Brasil","España"],correctIndex:0},
+{question:"Sudamericano sin Mundial",options:["Venezuela","Bolivia","Perú"],correctIndex:0},
+{question:"Máximo goleador Libertadores",options:["Alberto Spencer","Palermo","Zico"],correctIndex:0},
+{question:"Primera Copa América",options:["1916","1920","1900"],correctIndex:0},
+{question:"Goleador Argentina tras Messi",options:["Batistuta","Agüero","Higuaín"],correctIndex:0},
+{question:"Club apodado El Cervecero",options:["Quilmes","Lanús","Banfield"],correctIndex:0},
+{question:"Jugador expulsado antes de debutar en selección",options:["Messi","Maradona","Ronaldo"],correctIndex:0},
+{question:"Máximo goleador Real Madrid",options:["Cristiano Ronaldo","Raúl","Di Stéfano"],correctIndex:0},
+{question:"Primer club en ganar Sextete",options:["Barcelona","Bayern","Inter"],correctIndex:0},
+{question:"Jugador que anotó en 5 Mundiales",options:["Cristiano Ronaldo","Messi","Klose"],correctIndex:0},
 
-function norm(t){return t.toLowerCase().trim();}
+{question:"Primer arquero Jugador del Año UEFA",options:["Buffon","Neuer","Casillas"],correctIndex:0},
+{question:"Récord goles edición Mundial",options:["Just Fontaine","Ronaldo","Klose"],correctIndex:0},
+{question:"Selección con más rojas en Mundiales",options:["Brasil","Argentina","Italia"],correctIndex:0},
+{question:"Jugador Mundial, Champions y Balón mismo año",options:["Ronaldinho","Kaká","Rivaldo"],correctIndex:0},
+{question:"Entrenador Champions en 3 equipos",options:["Ancelotti","Guardiola","Mourinho"],correctIndex:0},
+{question:"Jugador con más partidos en Mundiales",options:["Messi","Maldini","Matthäus"],correctIndex:0},
+{question:"Final 1978 gol decisivo",options:["Bertoni","Kempes","Passarella"],correctIndex:0},
+{question:"Enzo uruguayo ídolo Zidane",options:["Francescoli","Recoba","Forlán"],correctIndex:0},
+{question:"Argentino con más Libertadores",options:["Independiente","Boca","River"],correctIndex:0},
+{question:"Equipo con 3 finales seguidas perdidas",options:["Ninguno","Juventus","Valencia"],correctIndex:0},
 
-const questions=[
-{q:"¿Quién es el único jugador que ganó el Balón de Oro jugando para tres clubes distintos?",o:["Ninguno","Cruyff","Cristiano Ronaldo"],a:"ninguno"},
-{q:"¿Qué arquero quedó en el podio del Balón de Oro en el siglo XXI?",o:["Manuel Neuer","Buffon","Casillas"],a:"manuel neuer"},
-{q:"¿Quién ganó el Balón de Oro jugando en segunda división esa temporada?",o:["Kevin Keegan","Rivaldo","Ronaldo"],a:"kevin keegan"},
-{q:"¿Primer no europeo en ganar el Balón de Oro?",o:["George Weah","Pelé","Maradona"],a:"george weah"},
-{q:"Récord de goles en un año natural (91)?",o:["Messi","Cristiano","Pelé"],a:"messi"},
-{q:"Único en ganar Bota de Oro en 3 ligas?",o:["Cristiano Ronaldo","Messi","Suárez"],a:"cristiano ronaldo"},
-{q:"¿Qué futbolista ganó el Balón de Oro sin jugar en liga europea?",o:["Ninguno","Pelé","Maradona"],a:"ninguno"},
-{q:"Máximo goleador histórico de selecciones?",o:["Cristiano Ronaldo","Messi","Ali Daei"],a:"cristiano ronaldo"},
-{q:"Jugador que ganó Mundial, Champions y Balón de Oro el mismo año?",o:["Ronaldinho","Kaká","Rivaldo"],a:"ronaldinho"},
-{q:"Primer arquero en ganar Jugador del Año UEFA?",o:["Buffon","Neuer","Casillas"],a:"buffon"},
-{q:"Selección presente en todos los Mundiales?",o:["Brasil","Alemania","Italia"],a:"brasil"},
-{q:"Jugador con más partidos en Mundiales?",o:["Messi","Maldini","Matthäus"],a:"messi"},
-{q:"País con más finales perdidas sin ganar?",o:["Países Bajos","Hungría","Croacia"],a:"países bajos"},
-{q:"Gol más rápido en Mundiales?",o:["Hakan Sükür","Ronaldo","Messi"],a:"hakan sükür"},
-{q:"Jugador que anotó en 5 Copas del Mundo?",o:["Cristiano Ronaldo","Messi","Klose"],a:"cristiano ronaldo"},
-{q:"Máximo goleador en una edición de Mundial?",o:["Just Fontaine","Ronaldo","Klose"],a:"just fontaine"},
-{q:"Selección que ganó Mundial con DT extranjero?",o:["Ninguna","España","Francia"],a:"ninguna"},
-{q:"Único jugador con 3 Mundiales?",o:["Pelé","Maradona","Beckenbauer"],a:"pelé"},
-{q:"Primer Mundial con tarjetas?",o:["México 1970","1966","1974"],a:"méxico 1970"},
-{q:"Selección con más rojas en Mundiales?",o:["Brasil","Argentina","Italia"],a:"brasil"},
-{q:"Club con más Champions después del Madrid?",o:["AC Milan","Liverpool","Bayern"],a:"ac milan"},
-{q:"Máximo goleador histórico Champions?",o:["Cristiano Ronaldo","Messi","Lewandowski"],a:"cristiano ronaldo"},
-{q:"Entrenador con Champions en 3 equipos?",o:["Ancelotti","Guardiola","Mourinho"],a:"ancelotti"},
-{q:"Primer club británico campeón de Europa?",o:["Celtic","Manchester United","Liverpool"],a:"celtic"},
-{q:"Jugador con Champions en 3 clubes?",o:["Seedorf","Cristiano","Ibrahimovic"],a:"seedorf"},
-{q:"Equipo con 3 finales consecutivas perdidas?",o:["Ninguno","Juventus","Valencia"],a:"ninguno"},
-{q:"Máximo goleador histórico Real Madrid?",o:["Cristiano Ronaldo","Raúl","Di Stéfano"],a:"cristiano ronaldo"},
-{q:"Primer club en ganar Sextete?",o:["Barcelona","Bayern","Inter"],a:"barcelona"},
-{q:"Jugador que marcó en 2 finales con distintos equipos?",o:["Cristiano Ronaldo","Eto'o","Mandzukic"],a:"cristiano ronaldo"},
-{q:"Estadio del Milagro de Estambul?",o:["Atatürk","Wembley","San Siro"],a:"atatürk"},
-{q:"Jugador expulsado antes de debutar en selección?",o:["Messi","Maradona","Ronaldo"],a:"messi"},
-{q:"Único invicto Premier 38 partidos?",o:["Arsenal","Chelsea","United"],a:"arsenal"},
-{q:"Jugador en 5 continentes?",o:["Pfannenstiel","Beckham","Rivaldo"],a:"pfannenstiel"},
-{q:"Club más antiguo del mundo?",o:["Sheffield FC","Notts County","Génova"],a:"sheffield fc"},
-{q:"Más Libertadores ganadas por jugador?",o:["Francisco Sá","Riquelme","Bochini"],a:"francisco sá"},
-{q:"Récord de invicto selecciones?",o:["Italia","Brasil","España"],a:"italia"},
-{q:"Distancia del penal?",o:["11 metros","10 metros","12 metros"],a:"11 metros"},
-{q:"Eurocopa sin clasificar originalmente?",o:["Dinamarca","Grecia","Portugal"],a:"dinamarca"},
-{q:"Más tarjetas rojas profesional?",o:["Gerardo Bedoya","Pepe","Sergio Ramos"],a:"gerardo bedoya"},
-{q:"Mínimo jugadores para no suspender?",o:["7","8","6"],a:"7"},
-{q:"Argentino con más Libertadores?",o:["Independiente","Boca","River"],a:"independiente"},
-{q:"Máximo goleador Libertadores?",o:["Alberto Spencer","Palermo","Zico"],a:"alberto spencer"},
-{q:"Primera Copa América?",o:["1916","1920","1900"],a:"1916"},
-{q:"Sudamericano sin Mundial?",o:["Venezuela","Bolivia","Perú"],a:"venezuela"},
-{q:"Goleador Argentina después de Messi?",o:["Batistuta","Agüero","Higuaín"],a:"batistuta"},
-{q:"Club apodado El Cervecero?",o:["Quilmes","Lanús","Banfield"],a:"quilmes"},
-{q:"DT Argentina 1986?",o:["Bilardo","Menotti","Basile"],a:"bilardo"},
-{q:"Final Mundial 1930 estadio?",o:["Centenario","Maracaná","Azteca"],a:"centenario"},
-{q:"Uruguayo Enzo ídolo de Zidane?",o:["Francescoli","Recoba","Forlán"],a:"francescoli"},
-{q:"Gol decisivo final 1978?",o:["Bertoni","Kempes","Passarella"],a:"bertoni"}
+{question:"Jugador con 2 finales Champions distintos clubes",options:["Cristiano Ronaldo","Eto'o","Mandzukic"],correctIndex:0},
+{question:"Estadio Milagro Estambul",options:["Atatürk","Wembley","San Siro"],correctIndex:0},
+{question:"Único jugador Bota Oro en 3 ligas",options:["Cristiano Ronaldo","Messi","Suárez"],correctIndex:0},
+{question:"Primer no europeo Balón de Oro",options:["George Weah","Pelé","Maradona"],correctIndex:0},
+{question:"Balón de Oro jugando segunda división",options:["Kevin Keegan","Rivaldo","Ronaldo"],correctIndex:0},
+{question:"Selección ganó Mundial con DT extranjero",options:["Ninguna","España","Francia"],correctIndex:0},
+{question:"Jugador más goles Libertadores una edición",options:["Daniel Onega","Palermo","Zico"],correctIndex:0},
+{question:"Club con más títulos Libertadores",options:["Independiente","Boca","River"],correctIndex:0},
+{question:"País con más Copas América",options:["Uruguay","Argentina","Brasil"],correctIndex:0},
+{question:"Máximo goleador historia Mundial",options:["Klose","Ronaldo","Müller"],correctIndex:0}
 ];
 
-function render(){
-  clearInterval(timerInterval);
-  time=10;
-  tries=2;
-  document.getElementById('timerFill').style.width='100%';
-  timerInterval=setInterval(tick,1000);
+let current=0,score=0,lives=3,attempts=2,timeLeft=10,timer,username="",doubleActive=false;
 
-  document.getElementById('status').innerText=
-  `Pregunta ${i+1}/${questions.length} · ⭐ ${score} pts · Intentos:${tries}`;
+function shuffle(a){return a.sort(()=>Math.random()-0.5);}
 
-  const q=questions[i];
-  let h=`<h3>${q.q}</h3>`;
-  q.o.forEach(op=>h+=`<button onclick="check('${op}')">${op}</button>`);
-  h+=`<input id='txt' placeholder='Escribí tu respuesta'>`;
-  h+=`<button onclick="check(document.getElementById('txt').value)">Responder</button>`;
-  document.getElementById('game').innerHTML=h;
+function startGame(){
+let block=localStorage.getItem("blockedUntil");
+if(block && Date.now()<block){alert("Perdiste. Volvé en 24 horas.");return;}
+username=document.getElementById("username").value;
+if(!username)return alert("Poné un nombre");
+questions=shuffle(questions);
+document.getElementById("start").classList.remove("active");
+document.getElementById("game").classList.add("active");
+loadQuestion();
 }
 
-function check(v){
-  if(norm(v)===questions[i].a){
-    clearInterval(timerInterval);
-    score+=8;
-    i++;
-
-    if(score>=400||i>=questions.length){winGame();return}
-    render();
-  }else{
-    tries--;
-    if(tries<=0){loseGame();return}
-    document.getElementById('status').innerText=
-    `Pregunta ${i+1}/${questions.length} · ⭐ ${score} pts · Intentos:${tries}`;
-  }
+function loadQuestion(){
+if(current>=questions.length||score>=400){winGame();return;}
+attempts=2; doubleActive=false; timeLeft=10;
+document.getElementById("doubleBtn").style.display=(current%10===0&&current!==0)?"inline-block":"none";
+let q=questions[current];
+document.getElementById("question").innerText=q.question;
+let opts=shuffle([...q.options]);
+let div=document.getElementById("options"); div.innerHTML="";
+opts.forEach(o=>{
+let b=document.createElement("button");
+b.innerText=o; b.className="option";
+b.onclick=()=>checkAnswer(o,q.options[q.correctIndex]);
+div.appendChild(b);
+});
+startTimer();
 }
 
-function tick(){
-  time--;
-  document.getElementById('timerFill').style.width=(time*10)+'%';
-  if(time<=0){clearInterval(timerInterval);loseGame()}
+function startTimer(){
+document.getElementById("timerBar").style.width="100%";
+timer=setInterval(()=>{
+timeLeft--;
+document.getElementById("timerBar").style.width=(timeLeft*10)+"%";
+if(timeLeft<=0){clearInterval(timer);lives=0;loseGame();}
+},1000);
 }
+
+function checkAnswer(sel,cor){
+if(sel===cor){
+clearInterval(timer);
+score+=doubleActive?16:8;
+document.getElementById("score").innerText=score;
+current++; loadQuestion();
+}else{
+attempts--;
+if(attempts<=0){lives--;document.getElementById("lives").innerText=lives;
+if(lives<=0){loseGame();}else{current++;loadQuestion();}}
+}
+}
+
+function activateDouble(){doubleActive=true;timeLeft=8;}
 
 function winGame(){
-  saveRank();
-  document.getElementById('game').innerHTML=
-  `<div class='win'><h2>🏆 ¡GANASTE! 🏆</h2>
-  <p>Puntaje: ${score}</p>
-  <button onclick='backToHome()'>Volver al menú</button></div>`;
+saveRanking();
+alert("🏆 GANASTE 🔥");
+location.reload();
 }
 
 function loseGame(){
-  lockGame();
-  saveRank();
-  document.getElementById('game').innerHTML=
-  `<div class='lose'><h2>❌ Perdiste</h2>
-  <p>No podés jugar por 24 horas</p></div>`;
+localStorage.setItem("blockedUntil",Date.now()+86400000);
+alert("❌ Perdiste. 24 horas bloqueado.");
+location.reload();
 }
 
-function saveRank(){
-  let r=JSON.parse(localStorage.getItem('rft_rank')||'[]');
-  r.push({name:username,score});
-  r.sort((a,b)=>b.score-a.score);
-  r=r.slice(0,10);
-  localStorage.setItem('rft_rank',JSON.stringify(r));
+function saveRanking(){
+let r=JSON.parse(localStorage.getItem("ranking"))||[];
+r.push({name:username,points:score});
+r.sort((a,b)=>b.points-a.points);
+localStorage.setItem("ranking",JSON.stringify(r.slice(0,10)));
 }
 
-function showRank(){
-  let r=JSON.parse(localStorage.getItem('rft_rank')||'[]');
-  let h='<h3>🏆 Ranking</h3>';
-  r.forEach((e,i)=>{
-    let medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'🎖️';
-    h+=`<div><span class='medal'>${medal}</span>${i+1}. ${e.name} - ${e.score}</div>`;
-  });
-  h+="<button onclick='backToHome()'>⬅ Volver</button>";
-  document.getElementById('game').innerHTML=h;
+function showRanking(){
+document.getElementById("start").classList.remove("active");
+document.getElementById("ranking").classList.add("active");
+let r=JSON.parse(localStorage.getItem("ranking"))||[];
+let div=document.getElementById("rankList"); div.innerHTML="";
+r.forEach((e,i)=>{
+let m=i==0?"🥇":i==1?"🥈":i==2?"🥉":"";
+div.innerHTML+=`<p>${m} ${e.name} - ${e.points}</p>`;
+});
 }
 
-function startGame(){
-  if(locked()){
-    document.getElementById('game').innerHTML=
-    "<div class='lose'><h2>⛔ Bloqueado</h2><p>Tenés que esperar 24 horas desde tu última derrota.</p></div>";
-    return;
-  }
-  const input=document.getElementById('usernameInput').value.trim();
-  if(!input){alert('Escribí un nombre');return}
-  username=input;
-  i=0;score=0;
-  render();
+function backToMenu(){
+document.getElementById("ranking").classList.remove("active");
+document.getElementById("start").classList.add("active");
 }
 
-function backToHome(){
-  document.getElementById('status').innerText='';
-  document.getElementById('game').innerHTML=
-  `<h3>Ingresá tu nombre</h3>
-  <input id='usernameInput' placeholder='Tu nombre'>
-  <button onclick='startGame()'>Jugar</button>
-  <button style='background:#06d6a0' onclick='showRank()'>Ver Ranking</button>`;
-}
-
-backToHome();
 </script>
 </body>
 </html>
